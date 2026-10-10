@@ -1,0 +1,4 @@
+[package-manager]
+requires = ["herdr", "git"]
+supports_version_pins = true
+os = ["linux", "macos"]

@@ -1,0 +1,23 @@
+[tools]
+"conda:lua" = "5.1.5"
+herdr = "0.9.3"
+stylua = "2.3.1"
+
+[tasks.test]
+description = "Run Lua unit tests and isolated mise/Herdr integration tests"
+run = ["lua tests/run.lua", "sh tests/integration.sh"]
+env = { MISE_REQUIRE_NATIVE_TESTS = "1" }
+
+[tasks."test:unit"]
+run = "lua tests/run.lua"
+
+[tasks."test:integration"]
+run = "sh tests/integration.sh"
+env = { MISE_REQUIRE_NATIVE_TESTS = "1" }
+
+[tasks.check]
+description = "Check Lua formatting and run the full test suite"
+run = ["stylua --check --syntax Lua51 metadata.lua hooks lib tests", "mise run test"]
+
+[tasks.format]
+run = "stylua --syntax Lua51 metadata.lua hooks lib tests"

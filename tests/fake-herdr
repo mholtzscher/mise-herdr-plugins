@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Persistent native-CLI fixture. All state lives in FAKE_HERDR_DIR."""
+import json
+import os
+from pathlib import Path
+import sys
+
+root = Path(os.environ["FAKE_HERDR_DIR"])
+root.mkdir(parents=True, exist_ok=True)
+args = sys.argv[1:]
+with (root / "argv.jsonl").open("a") as log:
+    log.write(json.dumps(args) + "\n")
+state_path = root / "plugins.json"
+plugins = json.loads(state_path.read_text()) if state_path.exists() else []
+if args == ["plugin", "list", "--json"]:
+    if (root / "list-error").exists():
+        print((root / "list-error").read_text(), file=sys.stderr)
+        sys.exit(12)
+    if (root / "list-output").exists():
+        print((root / "list-output").read_text())
+    else:
+        print(json.dumps({"id": "cli:plugin", "result": {"type": "plugin_list", "plugins": plugins}}))
+elif len(args) >= 4 and args[:2] == ["plugin", "install"]:
+    source = args[2]
+    ref = args[4] if args[3] == "--ref" else None
+    expected = ["plugin", "install", source] + (["--ref", ref] if ref is not None else []) + ["--yes"]
+    if args != expected:
+        sys.exit("unexpected install argv: " + repr(args))
+    failures = json.loads((root / "failures.json").read_text()) if (root / "failures.json").exists() else []
+    if source in failures:
+        print("fixture build failed for " + source, file=sys.stderr)
+        sys.exit(19)
+    owner, repo, *parts = source.split("/")
+    subdir = "/".join(parts) or None
+    native_source = {"kind": "github", "owner": owner, "repo": repo, "resolved_commit": "a" * 40}
+    if subdir is not None:
+        native_source["subdir"] = subdir
+    if ref is not None:
+        native_source["requested_ref"] = ref
+    if (root / "installed-ref").exists():
+        native_source["requested_ref"] = (root / "installed-ref").read_text()
+    plugin_root = root / "roots" / str(len(plugins))
+    plugin_root.mkdir(parents=True, exist_ok=True)
+    manifest = plugin_root / "herdr-plugin.toml"
+    manifest.write_text('id = "manifest-id-not-repo"\nversion = "9.8.7"\n')
+    plugins = [p for p in plugins if not (p["source"].get("owner") == owner and p["source"].get("repo") == repo and p["source"].get("subdir") == subdir)]
+    plugins.append({"plugin_id": "manifest-id-not-repo-" + str(len(plugins)), "plugin_root": str(plugin_root), "manifest_path": str(manifest), "version": "9.8.7", "enabled": True, "warnings": [], "source": native_source})
+    state_path.write_text(json.dumps(plugins))
+    print(json.dumps({"result": {"type": "plugin_install"}}))
+else:
+    sys.exit("unexpected Herdr command: " + repr(args))
